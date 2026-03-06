@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tier List</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            height: 100%;
+            font-family: Arial, sans-serif;
+            color: black;
+            background-color: #1a1a1a;
+        }
+
+        #tier-list {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            height: 100%;
+        }
+
+        .tier {
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            flex: 1 1 0;
+            min-height: 0;
+        }
+
+        .tier:not(:first-child) {
+            border-top: 2px solid black;
+        }
+
+        .tier:not(:last-child) {
+            border-bottom: 2px solid black;
+        }
+
+        .tier:has(+ #toast):nth-last-child(2) {
+            border-bottom: none;
+        }
+
+        .tier-items {
+            display: flex;
+            height: 100%;
+            width: 100%;
+            overflow-x: scroll;
+            scrollbar-width: none;
+            /* Firefox */
+        }
+
+        .tier-items::-webkit-scrollbar {
+            /* WebKit */
+            width: 0;
+            height: 0;
+        }
+
+        .tier-label {
+            aspect-ratio: 1 / 1;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 8vh;
+            border-right: 4px solid black;
+        }
+
+        .editable-container,
+        .editable {
+            aspect-ratio: 1 / 1;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            word-wrap: break-word;
+            word-break: break-word;
+            white-space: normal;
+            overflow-wrap: anywhere;
+            overflow: hidden;
+        }
+        .editable-container {
+            position: relative;
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .editable {
+            color: white;
+            text-align: center;
+            font-size: 2.5vh;
+            outline: none;
+            background-size: 100% 100%;
+        }
+
+        .grabber {
+            z-index: 10;
+            cursor: grab;
+            position: absolute;
+            top: 4px;
+            left: 4px;
+            width: 24px;
+            height: 24px;
+            display: none;
+        }
+
+        .editable:hover+.grabber,
+        .grabber:hover {
+            display: block;
+        }
+
+        #toast {
+            position: fixed;
+            left: 50%;
+            transform: translate(-50%, 20px);
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            animation: popDown 0.5s ease-out, popUp 0.5s ease-out 12.5s 1 forwards;
+            text-align: center;
+            line-height: 1.5;
+        }
+
+        #toast::after {
+            content: '';
+            display: block;
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            height: 4px;
+            width: 100%;
+            background-color: #8545fa;
+            animation: timeout 13s linear forwards;
+            border-radius: 0 0 0 5px;
+        }
+
+        @keyframes timeout {
+            from {
+                width: 100%;
+            }
+
+            to {
+                width: 0;
+            }
+        }
+
+        @keyframes popDown {
+            from {
+                transform: translate(-50%, -100%);
+                opacity: 0;
+            }
+
+            to {
+                transform: translate(-50%, 20px);
+                opacity: 1;
+            }
+        }
+
+        @keyframes popUp {
+            from {
+                transform: translate(-50%, 20px);
+                opacity: 1;
+            }
+
+            to {
+                transform: translate(-50%, -100%);
+                opacity: 0;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="toast">
+        <p>Press Ctrl+E to export your tier list as an image, or Ctrl+S to save it as a JSON file.</p>
+        <p>Empty slots will be omitted when exporting the tier list, and long rows will be wrapped to the next line.</p>
+        <p>You can scroll horizontally if a tier has too many items to fit.</p>
+        <p>Drag and drop a saved JSON file to load a tier list.</p>
+        <p>Images can be pasted or dragged into the slots.</p>
+        <p><strong>Press F1 at any time to show this help message again.</strong></p>
+    </div>
+
+    <div id="tier-list">
+        <div class="tier" id="S">
+            <span class="tier-label" style="background-color: #f77;">S</span>
+            <div class="tier-items"></div>
+        </div>
+        <div class="tier" id="A">
+            <span class="tier-label" style="background-color: #ffc48b;">A</span>
+            <div class="tier-items"></div>
+        </div>
+        <div class="tier" id="B">
+            <span class="tier-label" style="background-color: #ffe48d;">B</span>
+            <div class="tier-items"></div>
+        </div>
+        <div class="tier" id="C">
+            <span class="tier-label" style="background-color: #ffff8f;">C</span>
+            <div class="tier-items"></div>
+        </div>
+        <div class="tier" id="D">
+            <span class="tier-label" style="background-color: #c3ff89;">D</span>
+            <div class="tier-items"></div>
+        </div>
+        <div class="tier" id="F">
+            <span class="tier-label" style="background-color: #9ef89e;">F</span>
+            <div class="tier-items"></div>
+        </div>
+    </div>
+
+    <script>
+        function tierEmptySlots(tier) {
+            return Array.from(tier.querySelectorAll('.editable')).filter(div => div.textContent.trim() === '\u200b' && !div.style.backgroundImage).length;
+        }
+        function setEditableDivUp(ed) {
+            ed.addEventListener('input', function () {
+                if ((ed.textContent.trim() !== '\u200b' || ed.style.backgroundImage) &&
+                    tierEmptySlots(ed.parentNode.parentNode) === 0) {
+                    putContainerInTier(ed.parentNode.parentNode);
+                }
+                if (ed.textContent.trim() === '') {
+                    ed.textContent = '\u200b';
+                    const range = document.createRange();
+                    const sel = window.getSelection();
+                    range.selectNodeContents(ed);
+                    sel.removeAllRanges();
+                    sel.addRange(range);
+                    ed.style.backgroundImage = '';
+                    return;
+                }
+                const firstIsZWSP = ed.textContent?.[0] === '\u200b';
+                const lastIsZWSP = ed.textContent?.[ed.textContent.length - 1] === '\u200b';
+                if (firstIsZWSP || lastIsZWSP) {
+                    ed.textContent = firstIsZWSP ? ed.textContent.slice(1) : ed.textContent.slice(0, -1);
+                    const range = document.createRange();
+                    const sel = window.getSelection();
+                    range.setStart(ed.firstChild, ed.firstChild.length);
+                    range.setEnd(ed.firstChild, ed.firstChild.length);
+                    sel.removeAllRanges();
+                    sel.addRange(range);
+                    return;
+                }
+            });
+            ed.addEventListener('keydown', function (e) {
+                if (e.key === 'Backspace' && ed.textContent.trim() === '\u200b') {
+                    ed.style.backgroundImage = '';
+                }
+            });
+
+            ed.addEventListener('paste', function (e) {
+                e.preventDefault();
+                const img = (e.clipboardData || e.originalEvent.clipboardData).files[0];
+                if (img) {
+                    const reader = new FileReader();
+                    reader.onload = function (event) {
+                        ed.innerHTML = '\u200b';
+                        const range = document.createRange();
+                        const sel = window.getSelection();
+                        range.selectNodeContents(ed);
+                        sel.removeAllRanges();
+                        sel.addRange(range);
+                        ed.style.backgroundImage = `url(${event.target.result})`;
+                        if (ed.style.backgroundImage && tierEmptySlots(ed.parentNode.parentNode) === 0) {
+                            putContainerInTier(ed.parentNode.parentNode);
+                        }
+                    };
+                    reader.readAsDataURL(img);
+                }
+            });
+
+            ed.addEventListener('blur', function () {
+                if (ed.textContent.trim() === '\u200b' && !ed.style.backgroundImage) {
+                    if (tierEmptySlots(ed.parentNode.parentNode) > 1) {
+                        ed.parentNode.remove();
+                    }
+                }
+            });
+        }
+
+        function setGrabberUp(grabber) {
+            grabber.addEventListener('mousedown', function (e) {
+                e.preventDefault();
+
+                document.activeElement.blur();
+                const container = grabber.parentNode;
+                const originalTier = container.parentNode;
+
+                let previousHovered = null;
+                function onMouseMove(e) {
+                    const elementAt = document.elementFromPoint(e.clientX, e.clientY);
+                    const containerAt = elementAt.closest('.editable-container');
+                    if (containerAt) {
+                        if (previousHovered !== containerAt && previousHovered !== null) {
+                            if (containerAt.getBoundingClientRect().left <= previousHovered.getBoundingClientRect().left) {
+                                containerAt.parentNode.insertBefore(container, containerAt);
+                            } else {
+                                containerAt.parentNode.insertBefore(container, containerAt.nextSibling);
+                            }
+                        }
+                        previousHovered = containerAt;
+                        return;
+                    }
+                    const tierAt = elementAt.closest('.tier-items');
+                    if (tierAt) {
+                        tierAt.appendChild(container);
+                    }
+                }
+
+                function onMouseUp() {
+                    document.removeEventListener('mousemove', onMouseMove);
+                    document.removeEventListener('mouseup', onMouseUp);
+                    if (tierEmptySlots(originalTier) === 0) {
+                        putContainerInTier(originalTier);
+                    }
+                }
+
+                document.addEventListener('mousemove', onMouseMove);
+                document.addEventListener('mouseup', onMouseUp);
+            });
+        }
+
+        function putContainerInTier(tier) {
+            const container = document.createElement('div');
+            container.classList.add('editable-container');
+            const editable = document.createElement('div');
+            editable.classList.add('editable');
+            editable.contentEditable = true;
+            editable.textContent = '\u200b';
+            const grabber = document.createElement('div');
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.setAttribute('viewBox', '0 0 24 24');
+            svg.setAttribute('width', '24');
+            svg.setAttribute('height', '24');
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('d',
+                `m 9,5 3,-3 3,3 h -2 v 6 h 6 V 9 l 3,3 -3,3 v -2 h -6 v 6 h 2 l -3,3 -3,-3 h 2 V 13 H 5 v 2 L 2,12 5,9 v 2 h 6 V 5 Z`);
+            path.setAttribute('stroke', 'white');
+            path.setAttribute('stroke-width', '1');
+            path.setAttribute('fill', 'white');
+            svg.appendChild(path);
+            grabber.appendChild(svg);
+            grabber.classList.add('grabber');
+            container.appendChild(editable);
+            container.appendChild(grabber);
+            const tierItems = tier.querySelector('.tier-items');
+            if (tierItems) {
+                tierItems.appendChild(container);
+            }
+            else if (tier.classList.contains('tier-items')) {
+                tier.appendChild(container);
+            } else {
+                console.error('No valid tier-items container found.');
+            }
+            setEditableDivUp(editable);
+            setGrabberUp(grabber);
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const tiers = document.querySelectorAll('.tier');
+            tiers.forEach(tier => {
+                putContainerInTier(tier);
+            });
+        });
+
+        document.addEventListener('dragover', (e) => {
+            e.preventDefault()
+        });
+
+        document.addEventListener('drop', function (e) {
+            if ([...e.dataTransfer.items].some((item) => item.kind === "file")) {
+                e.preventDefault();
+
+                const files = [...e.dataTransfer.files];
+                if (files.length === 1) {
+                    const file = files[0];
+                    if (file.name.endsWith('.json')) {
+                        const reader = new FileReader();
+                        reader.onload = function (event) {
+                            try {
+                                const tierData = JSON.parse(event.target.result);
+                                Object.keys(tierData).forEach(tier => {
+                                    const tierElement = document.getElementById(tier);
+                                    if (tierElement) {
+                                        tierElement.querySelector('.tier-items').innerHTML = '';
+                                        tierData[tier].forEach(item => {
+                                            putContainerInTier(tierElement);
+                                            const container = tierElement.querySelector('.editable-container:last-child');
+                                            const editable = container.querySelector('.editable');
+                                            if (item.text) {
+                                                editable.textContent = item.text;
+                                            }
+                                            if (item.image) {
+                                                editable.style.backgroundImage = `url(${item.image})`;
+                                            }
+                                        });
+                                        putContainerInTier(tierElement);
+                                    }
+                                });
+                            } catch (error) {
+                                console.error('Error parsing JSON file:', error);
+                            }
+                        };
+                        reader.readAsText(file);
+                    }
+                }
+            }
+        });
+
+        document.addEventListener('keydown', async function (e) {
+            if (e.ctrlKey && e.key === 'e') {
+                e.preventDefault();
+                // screenshot the page and save it as an image
+                const canvas = await generateCanvas();
+                const link = document.createElement('a');
+                link.download = 'tier-list.png';
+                link.href = canvas.toDataURL();
+                link.click();
+            } else if (e.ctrlKey && e.key === 's') {
+                e.preventDefault();
+                // save the tier list as a JSON file
+                const tiers = ['S', 'A', 'B', 'C', 'D', 'F'];
+                const tierData = {};
+                tiers.forEach(tier => {
+                    const tierElement = document.getElementById(tier);
+                    const items = tierElement.querySelectorAll('.editable');
+                    tierData[tier] = [];
+                    items.forEach(item => {
+                        if ((item.textContent.trim() !== '' && item.textContent.trim() !== '\u200b') || item.style.backgroundImage) {
+                            tierData[tier].push({
+                                text: item.textContent.trim(),
+                                image: item.style.backgroundImage ? item.style.backgroundImage.slice(5, -2) : null
+                            });
+                        }
+                    });
+                });
+                const blob = new Blob([JSON.stringify(tierData, null, 2)], { type: 'application/json' });
+                const link = document.createElement('a');
+                link.download = 'tier-list.json';
+                link.href = URL.createObjectURL(blob);
+                link.click();
+            } else if (e.key === 'F1') {
+                e.preventDefault();
+                let toast = document.getElementById('toast');
+                toast.remove();
+                document.body.prepend(toast);
+            }
+        });
+
+        async function generateCanvas() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1920;
+            const heightUnit = 1080 / 6;
+            const tierHeights = [];
+            const tiers = "SABCDF";
+            for (let i = 0; i < 6; i++) {
+                let tier = document.getElementById(tiers[i]);
+                let items = tier.querySelectorAll('.editable');
+                tierHeights[i] = Math.ceil(items.length / 10);
+            }
+            canvas.height = getHeightAtTier(6);
+
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = '#1a1a1a';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const tierColors = ['#f77', '#ffc48b', '#ffe48d', '#ffff8f', '#c3ff89', '#9ef89e'];
+            for (let i = 0; i < 6; i++) {
+                ctx.fillStyle = tierColors[i];
+                ctx.fillRect(0, getHeightAtTier(i), heightUnit, tierHeights[i] * heightUnit);
+            }
+
+            ctx.fillStyle = 'black';
+            ctx.font = 'bold 86.4px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            for (let i = 0; i < 6; i++) {
+                ctx.fillText(tiers[i], heightUnit / 2, getHeightAtTier(i) + tierHeights[i] * heightUnit / 2);
+            }
+
+            const loadPromises = [];
+            for (let i = 0; i < 6; i++) {
+                let tier = document.getElementById(tiers[i]);
+                let items = tier.querySelectorAll('.editable');
+                items.forEach((item, index) => {
+                    if (item.style.backgroundImage) {
+                        loadPromises.push(new Promise((resolve, reject) => {
+                            const img = new Image();
+                            img.onload = () => resolve({ img, i, index, item });
+                            img.onerror = reject;
+                            img.src = item.style.backgroundImage.slice(5, -2);
+                        }));
+                    }
+                });
+            }
+
+            const loaded = await Promise.allSettled(loadPromises);
+
+            ctx.font = '27px Arial';
+            for (let i = 0; i < 6; i++) {
+                let tier = document.getElementById(tiers[i]);
+                let items = tier.querySelectorAll('.editable');
+                items.forEach((item, index) => {
+                    const imgResult = loaded.find(result => result.status === 'fulfilled' && result.value.i === i && result.value.index === index);
+                    const wrapRow = Math.floor(index / 10);
+                    const wrapColumn = index % 10;
+                    if (imgResult) {
+                        ctx.drawImage(imgResult.value.img, heightUnit * (wrapColumn + 1), getHeightAtTier(i) + heightUnit * wrapRow, heightUnit, heightUnit);
+                    } else if (item.textContent.trim() === '' || item.textContent.trim() === '\u200b') {
+                        return;
+                    }
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+                    ctx.fillRect(heightUnit * (wrapColumn + 1), getHeightAtTier(i) + heightUnit * wrapRow, heightUnit, heightUnit);
+                    ctx.fillStyle = 'white';
+                    /* ctx.fillText(item.textContent, heightUnit * (wrapColumn + 1) + heightUnit / 2, getHeightAtTier(i) + heightUnit * wrapRow + heightUnit / 2, heightUnit); */
+                    const lines = getLines(ctx, item.textContent, heightUnit);
+                    lines.forEach((line, lineIndex) => {
+                        ctx.fillText(line, heightUnit * (wrapColumn + 1) + heightUnit / 2, getHeightAtTier(i) + heightUnit * wrapRow + heightUnit / 2 + lineIndex * 27 - ((lines.length - 1) * 27 / 2), heightUnit);
+                    });
+                });
+            }
+
+            ctx.fillStyle = 'black';
+            for (let i = 0; i < 5; i++) {
+                ctx.fillRect(0, getHeightAtTier(i + 1) - 2, canvas.width, 4);
+            }
+            ctx.fillRect(heightUnit - 4, 0, 4, canvas.height);
+
+            function getHeightAtTier(tierIndex) {
+                return tierHeights.slice(0, tierIndex).reduce((acc, h) => acc + h, 0) * heightUnit;
+            }
+            return canvas;
+        }
+        // https://stackoverflow.com/a/16599668
+        function getLines(ctx, text, maxWidth) {
+            const words = text.split(' ');
+            const lines = [];
+            let currentLine = words[0];
+        
+            for (let i = 1; i < words.length; i++) {
+                const word = words[i];
+                const width = ctx.measureText(currentLine + ' ' + word).width;
+                if (width < maxWidth) {
+                    currentLine += ' ' + word;
+                } else {
+                    lines.push(currentLine);
+                    currentLine = word;
+                }
+            }
+            lines.push(currentLine);
+
+            // this block is my own, though. it handles wrapping single long words.
+            for (let i = 0; i < lines.length; i++) {
+                if (lines[i].split(' ').length === 1) {
+                    let charIndex = lines[i].length;
+                    while (charIndex > 0 && ctx.measureText(lines[i].slice(0, charIndex)).width > maxWidth) {
+                        charIndex--;
+                    }
+                    if (charIndex < lines[i].length) {
+                        let text = lines[i].slice(0, charIndex);
+                        let remainingText = lines[i].slice(charIndex);
+                        lines[i] = text;
+                        lines.splice(i + 1, 0, remainingText);
+                    }
+                }
+            }
+            return lines;
+        }
+
+    </script>
+</body>
+
+</html>
